@@ -1,0 +1,34 @@
+{
+  "name": "social-media-helpers",
+  "owner": {
+    "name": "CKrogmann"
+  },
+  "description": "Python tools for managing and growing a social media presence — photo sorting, viral content tracking, and Instagram analytics.",
+  "version": "1.0.0",
+  "plugins": [
+    {
+      "name": "photo-sorter",
+      "source": "./skills/photo-sorter",
+      "description": "Auto-sort your Photos library into custom albums using Claude AI vision. Define your own album names and criteria on first run.",
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["photos", "organization", "automation", "ai"]
+    },
+    {
+      "name": "viral-content-analysis",
+      "source": "./skills/viral-content-analysis",
+      "description": "Track competitor Instagram accounts and surface top-performing posts, hooks, and content formats into Notion.",
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["instagram", "analytics", "competitors", "notion", "social media"]
+    },
+    {
+      "name": "instagram-stats",
+      "source": "./skills/instagram-stats",
+      "description": "Refresh your Instagram post and reel stats in an Excel planning sheet via the Instagram Graph API.",
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["instagram", "stats", "excel", "analytics"]
+    }
+  ]
+}
