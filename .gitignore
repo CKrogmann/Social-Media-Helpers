@@ -1,0 +1,11 @@
+.env
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+~/.photo_sorter_config.json
+~/.viral_content_config.json
+~/.instagram_stats_config.json
+.viral_content_tmp/
+.photo_sorter_tmp/
+*.xlsx
