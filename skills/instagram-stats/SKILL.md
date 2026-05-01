@@ -1,57 +1,101 @@
 ---
-name: instagram-stats
-description: Refresh Instagram post and reel stats in the Excel planning sheet via the Instagram Graph API. Use when asked to update Instagram stats, refresh analytics, or run the stats updater.
-allowed-tools: Bash(python3 *)
+description: Refresh Instagram post and reel stats in an Excel planning sheet via the Instagram Graph API
 ---
 
-## Instagram Stats Updater
+# Instagram Stats Updater
 
-Pulls your Instagram post and reel metrics (likes, comments, reach, saves, shares, views) into an Excel file. Updates a rolling 90-day window each run. Preserves any manually entered fields.
+Pulls your Instagram post and reel metrics into an Excel file. Updates a rolling 90-day window each run.
 
-**Output:** `~/Celina Krogmann SM Planning.xlsx`
+## Step 1 — Find the script
 
-## Check setup
+```bash
+SCRIPT=$(find ~/.claude/plugins/cache -name "instagram_stats_updater.py" 2>/dev/null | head -1)
+[ -z "$SCRIPT" ] && SCRIPT=$(find ~/social-media-helpers -name "instagram_stats_updater.py" 2>/dev/null | head -1)
+echo "${SCRIPT:-NOT_FOUND}"
+```
+
+If `NOT_FOUND`, tell the user the plugin isn't installed and stop.
+
+## Step 2 — Check config
 
 ```bash
 python3 -c "
 import json, os
-from datetime import datetime, timezone
-cfg_path = os.path.expanduser('~/.instagram_stats_config.json')
-if os.path.exists(cfg_path):
-    cfg = json.load(open(cfg_path))
-    has_token = bool(cfg.get('access_token'))
-    has_app = bool(os.getenv('INSTAGRAM_APP_ID') and os.getenv('INSTAGRAM_APP_SECRET'))
-    if has_token:
-        expires = cfg.get('token_expires', '')
-        print('CONFIGURED')
-        print(f'Token expires: {expires}')
-        print(f'App credentials: {\"via env vars\" if has_app else \"missing — set INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET\"}')
-    else:
-        print('NEEDS_SETUP: access_token missing in ~/.instagram_stats_config.json')
-        print('  Generate a token at developers.facebook.com and add it to the config file.')
+p = os.path.expanduser('~/.instagram_stats_config.json')
+if os.path.exists(p):
+    cfg = json.load(open(p))
+    print('CONFIGURED' if cfg.get('access_token') else 'NEEDS_TOKEN')
 else:
-    print('NEEDS_SETUP: config file not found')
-    print('  Run the script once in your terminal to create it, then add your access_token.')
+    print('NEEDS_SETUP')
 "
 ```
 
-If `NEEDS_SETUP`: tell the user to:
-1. Go to developers.facebook.com → their app → Instagram → Generate Token
-2. Add it to `~/.instagram_stats_config.json` under `"access_token"`
+## Step 3 — If CONFIGURED, skip to Step 5.
 
-If `CONFIGURED`: proceed to run.
+## Step 4 — If NEEDS_SETUP or NEEDS_TOKEN, guide the user through setup
 
-## Run
+Tell the user warmly:
+
+> To pull your Instagram stats, I need a token that gives me read access to your account. Here's how to get one — it takes about 2 minutes:
+>
+> 1. Go to **[developers.facebook.com](https://developers.facebook.com)**
+> 2. Open your app (it may be called something like "Celina Stats" or "Instagram Stats")
+> 3. In the left sidebar, click **Instagram** → **Generate Access Token**
+> 4. Follow the prompts to connect your Instagram account
+> 5. Copy the token that appears — it's a long string starting with `EAA...`
+>
+> Once you have it, paste it here and I'll set everything up for you.
+
+Then wait for the user to paste their token. When they do:
+
+1. Ask for their Instagram user ID if you don't already know it. Tell them:
+   > I also need your Instagram User ID (a number like `17841401302003364`). You can find it by going to your Facebook Developer app → Instagram → and looking for "Instagram User ID" or "Business Account ID".
+
+2. Once you have both values, write the config file:
 
 ```bash
-INSTAGRAM_APP_ID="$INSTAGRAM_APP_ID" INSTAGRAM_APP_SECRET="$INSTAGRAM_APP_SECRET" python3 ~/social-media-helpers/instagram-stats/instagram_stats_updater.py 2>&1
+python3 -c "
+import json, os
+from datetime import datetime, timezone, timedelta
+cfg = {
+    'access_token': 'PASTE_TOKEN_HERE',
+    'ig_user_id': 'PASTE_USER_ID_HERE',
+    'app_id': os.getenv('INSTAGRAM_APP_ID', ''),
+    'app_secret': os.getenv('INSTAGRAM_APP_SECRET', ''),
+    'token_expires': (datetime.now(timezone.utc) + timedelta(days=60)).isoformat(),
+    'last_run': None
+}
+with open(os.path.expanduser('~/.instagram_stats_config.json'), 'w') as f:
+    json.dump(cfg, f, indent=2)
+print('Config saved.')
+"
 ```
 
-## Report back
+Replace `PASTE_TOKEN_HERE` and `PASTE_USER_ID_HERE` with the actual values before running.
 
-After running, tell the user:
+3. Confirm: "All set! Running your stats now..."
+
+## Step 5 — Check for Excel file
+
+```bash
+ls ~/Desktop/"Celina Krogmann SM Planning.xlsx" 2>/dev/null || \
+ls ~/"Celina Krogmann SM Planning.xlsx" 2>/dev/null || \
+find ~ -maxdepth 3 -name "*.xlsx" 2>/dev/null | head -5
+```
+
+If the Excel file isn't found at the expected path, ask the user where their planning spreadsheet is saved and note it for them. The script writes to `~/Celina Krogmann SM Planning.xlsx` by default — if theirs is elsewhere, tell them to move or rename it there.
+
+## Step 6 — Run
+
+```bash
+INSTAGRAM_APP_ID="${INSTAGRAM_APP_ID}" INSTAGRAM_APP_SECRET="${INSTAGRAM_APP_SECRET}" python3 "$SCRIPT" 2>&1
+```
+
+## Step 7 — Report back
+
+Tell the user in plain language:
 - How many posts and reels were fetched
 - How many rows were updated in the Excel file
-- Whether the access token was refreshed
-- Where the file was saved
-- Any warnings (e.g. posts outside the 90-day window keeping old stats)
+- Where the file is saved (full path)
+- Whether their token was auto-refreshed
+- If anything went wrong, explain it simply and what to do next
