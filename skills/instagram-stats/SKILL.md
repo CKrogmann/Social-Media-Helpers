@@ -1,5 +1,7 @@
 ---
+name: instagram-stats
 description: Refresh Instagram post and reel stats in an Excel planning sheet via the Instagram Graph API
+allowed-tools: Bash(python3 *)
 ---
 
 # Instagram Stats Updater
