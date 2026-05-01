@@ -1,0 +1,15 @@
+{
+  "name": "viral-content-analysis",
+  "version": "1.0.0",
+  "description": "Track competitor Instagram accounts and surface top-performing posts, hooks, and formats into Notion",
+  "author": {
+    "name": "CKrogmann",
+    "url": "https://github.com/CKrogmann"
+  },
+  "repository": "https://github.com/CKrogmann/Social-Media-Helpers",
+  "license": "MIT",
+  "keywords": ["instagram", "analytics", "competitors", "notion", "social media"],
+  "commands": [
+    "./commands/viral-content-analysis.md"
+  ]
+}

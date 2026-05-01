@@ -1,32 +1,39 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "social-media-helpers",
-  "owner": {
-    "name": "CKrogmann"
-  },
   "description": "Python tools for managing and growing a social media presence — photo sorting, viral content tracking, and Instagram analytics.",
-  "version": "1.0.0",
+  "owner": {
+    "name": "CKrogmann",
+    "url": "https://github.com/CKrogmann"
+  },
   "plugins": [
     {
       "name": "photo-sorter",
-      "source": "./skills/photo-sorter",
-      "description": "Auto-sort your Photos library into custom albums using Claude AI vision. Define your own album names and criteria on first run.",
-      "version": "1.0.0",
+      "source": "./plugins/photo-sorter",
+      "description": "Auto-sort your Photos library into custom albums using Claude AI vision. Define your own album names and sorting criteria on first run.",
+      "author": {
+        "name": "CKrogmann"
+      },
       "category": "productivity",
-      "keywords": ["photos", "organization", "automation", "ai"]
+      "keywords": ["photos", "organization", "automation", "ai", "macos"]
     },
     {
       "name": "viral-content-analysis",
-      "source": "./skills/viral-content-analysis",
+      "source": "./plugins/viral-content-analysis",
       "description": "Track competitor Instagram accounts and surface top-performing posts, hooks, and content formats into Notion.",
-      "version": "1.0.0",
+      "author": {
+        "name": "CKrogmann"
+      },
       "category": "productivity",
       "keywords": ["instagram", "analytics", "competitors", "notion", "social media"]
     },
     {
       "name": "instagram-stats",
-      "source": "./skills/instagram-stats",
+      "source": "./plugins/instagram-stats",
       "description": "Refresh your Instagram post and reel stats in an Excel planning sheet via the Instagram Graph API.",
-      "version": "1.0.0",
+      "author": {
+        "name": "CKrogmann"
+      },
       "category": "productivity",
       "keywords": ["instagram", "stats", "excel", "analytics"]
     }

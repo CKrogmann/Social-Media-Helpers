@@ -1,0 +1,15 @@
+{
+  "name": "photo-sorter",
+  "version": "1.0.0",
+  "description": "Auto-sort your Photos library into custom albums using Claude AI vision",
+  "author": {
+    "name": "CKrogmann",
+    "url": "https://github.com/CKrogmann"
+  },
+  "repository": "https://github.com/CKrogmann/Social-Media-Helpers",
+  "license": "MIT",
+  "keywords": ["photos", "organization", "automation", "ai", "macos"],
+  "commands": [
+    "./commands/photo-sorter.md"
+  ]
+}
