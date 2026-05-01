@@ -72,6 +72,40 @@ def save_config(cfg):
     with open(CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
 
+def run_setup_wizard(cfg):
+    """Interactive first-run wizard — collects accounts and Notion credentials."""
+    print("\n" + "="*55)
+    print("  Viral Content Analysis — First-time Setup")
+    print("="*55)
+    print("This runs once. Answers are saved to ~/.viral_content_config.json\n")
+
+    print("Which Instagram accounts do you want to track?")
+    print("Enter handles one per line (no @). Press Enter twice when done.\n")
+    accounts = []
+    while True:
+        handle = input(f"  Handle {len(accounts)+1} (or press Enter to finish): ").strip().lstrip("@")
+        if not handle:
+            if not accounts:
+                print("  You need at least one account.")
+                continue
+            break
+        accounts.append(handle)
+    cfg["accounts"] = accounts
+    print(f"\n  ✓ Tracking {len(accounts)} accounts: {', '.join(accounts)}")
+
+    print("\nNotion setup — you need an integration token and a target page.")
+    print("  1. Go to notion.so/my-integrations → New integration → copy the token")
+    print("  2. Create a blank Notion page and share it with your integration")
+    print("  3. Copy the page ID from the URL (the long string after the last /)\n")
+
+    cfg["notion_token"]   = input("  Notion integration token: ").strip()
+    cfg["notion_page_id"] = input("  Notion page ID: ").strip()
+
+    save_config(cfg)
+    print("\n✓ Setup complete. Config saved to ~/.viral_content_config.json")
+    print("  Running analysis now...\n")
+    return cfg
+
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
 def setup_tmp_dir():
@@ -713,23 +747,19 @@ def main():
     setup_tmp_dir()
     cfg = load_config()
 
-    # Validate config
-    if not cfg.get("notion_token"):
-        log("ERROR: notion_token not set in ~/.viral_content_config.json")
-        log("  1. Go to notion.so/my-integrations → New integration → copy token")
-        log("  2. Set 'notion_token' in ~/.viral_content_config.json")
-        sys.exit(1)
+    # First-run setup wizard
+    needs_setup = not cfg.get("accounts") or not cfg.get("notion_token") or not cfg.get("notion_page_id")
+    if needs_setup:
+        if not sys.stdin.isatty():
+            log("ERROR: First-time setup required. Run this script directly in a terminal:")
+            log("  python3 viral_content_analysis.py")
+            log("You will be guided through adding accounts and Notion credentials.")
+            sys.exit(1)
+        cfg = run_setup_wizard(cfg)
 
-    if not cfg.get("notion_page_id"):
-        log("ERROR: notion_page_id not set in ~/.viral_content_config.json")
-        log("  1. Create a blank page called 'Viral Content Analysis' in Notion")
-        log("  2. Connect your integration via the ... menu → Connections")
-        log("  3. Copy the page ID from the URL and set 'notion_page_id'")
-        sys.exit(1)
-
-    if not cfg.get("accounts"):
-        log("ERROR: no accounts configured in ~/.viral_content_config.json")
-        log("  Add Instagram usernames to the 'accounts' list")
+    if not API_KEY:
+        log("ERROR: ANTHROPIC_API_KEY environment variable is not set.")
+        log("  export ANTHROPIC_API_KEY=your_key_here")
         sys.exit(1)
 
     # Determine lookback window (VIRAL_TEST_DAYS env var overrides for testing)

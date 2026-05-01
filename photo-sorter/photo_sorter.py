@@ -23,20 +23,13 @@ LOG_FILE      = Path.home() / "photo_sorter.log"
 # Apple Core Data epoch: Jan 1 2001
 APPLE_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
 
-# Album names (created in Photos app and sync to iPhone)
-ALBUMS = {
-    "model_bts":          "Model - BTS",
-    "model_editorial":    "Model - Editorial",
-    "lifestyle_peaceful": "Lifestyle - Peaceful",
-    "lifestyle_cute":     "Lifestyle - Cute",
-    "business":           "Business - Startup",
-    "skip":               None,
-}
-
 CONFIDENCE_THRESHOLD = 75   # skip if below this
 ERROR_RATE_THRESHOLD = 0.20
 BATCH_SIZE           = 200
 BURST_WINDOW_SECS    = 3    # photos within this many seconds = same burst, keep only first
+
+# ALBUMS is loaded from config at runtime (see load_config / run_setup_wizard)
+ALBUMS = {}
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -59,11 +52,98 @@ def load_config():
         "auto_classified": 0,
         "last_run":        None,
         "mode":            "auto",
+        "user_name":       "",
+        "user_context":    "",
+        "albums":          {},
+        "general_rules":   "",
     }
 
 def save_config(cfg):
     with open(CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
+
+def run_setup_wizard(cfg):
+    """Interactive first-run wizard — defines who the user is and what albums to create."""
+    print("\n" + "="*55)
+    print("  Photo Sorter — First-time Setup")
+    print("="*55)
+    print("This runs once. Answers are saved to ~/.photo_sorter_config.json\n")
+
+    cfg["user_name"] = input("Your name (e.g. Sarah): ").strip()
+
+    print("\nDescribe what this photo library is for.")
+    print("Example: 'social media content for a lifestyle blogger based in NYC'")
+    cfg["user_context"] = input("Context: ").strip()
+
+    print("\nNow define your albums. For each album you'll give:")
+    print("  1. The exact name as it appears in your Photos app")
+    print("  2. Criteria: what should go there (content, people, vibe, location, etc.)\n")
+
+    albums = {}
+    idx = 1
+    while True:
+        print(f"Album {idx} (press Enter with no name to finish):")
+        name = input(f"  Photos app album name: ").strip()
+        if not name:
+            if not albums:
+                print("  You need at least one album. Try again.")
+                continue
+            break
+        key = f"album_{idx}"
+        criteria = input(f"  Sorting criteria for '{name}': ").strip()
+        albums[key] = {"name": name, "criteria": criteria}
+        idx += 1
+
+    cfg["albums"] = albums
+
+    print("\nAny general rules that apply to all photos?")
+    print("Example: 'Only include photos where I am clearly visible. Skip blurry shots.'")
+    cfg["general_rules"] = input("General rules (or press Enter to skip): ").strip()
+
+    save_config(cfg)
+    print("\n✓ Setup complete. Your albums have been saved.")
+    print("  Make sure these album names exist in your Photos app before running.\n")
+    return cfg
+
+def build_albums_dict(cfg):
+    """Build the runtime ALBUMS dict from config."""
+    albums = {}
+    for key, val in cfg.get("albums", {}).items():
+        albums[key] = val["name"]
+    albums["skip"] = None
+    return albums
+
+def build_system_prompt(cfg):
+    """Generate the Claude system prompt from user config."""
+    name    = cfg.get("user_name", "the user")
+    context = cfg.get("user_context", "personal use")
+    rules   = cfg.get("general_rules", "")
+
+    lines = [
+        f"You are sorting photos and videos for {name} — {context}.",
+        "Your job is to classify each photo into one of the defined albums. Only sort content that clearly fits; otherwise skip.",
+        "",
+        "IMPORTANT RULES:",
+        "- For burst/similar shots, only the best one will be shown — classify it normally.",
+    ]
+    if rules:
+        lines.append(f"- {rules}")
+
+    lines += ["", "Albums and their criteria:", ""]
+    for key, val in cfg.get("albums", {}).items():
+        lines.append(f"{key}: {val['criteria']}")
+
+    lines += [
+        "",
+        "skip: Everything that does not clearly fit one of the above albums.",
+        "",
+        "Reply with ONLY the album key and a confidence score 0-100.",
+        "Format: ALBUM_KEY|CONFIDENCE",
+        "Example: album_1|91",
+        "",
+        "Only use a category if you are 75 or above in confidence. Otherwise reply: skip|confidence",
+    ]
+    return "\n".join(lines)
 
 # ── Photos library (SQLite) ───────────────────────────────────────────────────
 
@@ -138,8 +218,8 @@ def get_photos_to_sort(since_dt, processed_uuids):
 
 # ── Photos app (AppleScript) ──────────────────────────────────────────────────
 
-def ensure_albums_exist():
-    for album_name in [v for v in ALBUMS.values() if v]:
+def ensure_albums_exist(albums):
+    for album_name in [v for v in albums.values() if v]:
         script = f'''
         tell application "Photos"
             if not (exists album "{album_name}") then
@@ -225,34 +305,9 @@ def prepare_for_api(photo_path, is_video=False):
 
 # ── Claude AI classification ──────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are sorting photos and videos for Celina Krogmann — a model and startup founder based in Miami.
-Your job is to classify content for her social media. Only sort content that clearly fits a category; otherwise skip.
+# SYSTEM_PROMPT is generated at runtime from user config via build_system_prompt()
 
-IMPORTANT RULES:
-- Focus on content that includes Celina herself. If she is not visible and the photo does not clearly serve one of her content categories, classify as skip.
-- For burst/similar shots, only the best one will be shown to you — classify it normally.
-
-Categories:
-
-model_bts: Behind-the-scenes on a model set. Shows a photography/video set environment, lighting equipment, crew, Celina getting hair/makeup done, candid work selfies, walking on set, short video clips from a shoot. Does NOT need to be a polished image.
-
-model_editorial: Final, polished, professional model photos only. Must be razor sharp, high resolution, clearly from a professional shoot with intentional lighting and styling. Think catalog, lookbook, or magazine quality. If there is any doubt about quality or polish, do NOT use this category.
-
-lifestyle_peaceful: Calm, aesthetic moments. Nature, sunsets, ocean, coffee, journaling, reading, travel scenery. Does NOT need to show Celina — the vibe and aesthetic matter. Skip if chaotic or unrelated.
-
-lifestyle_cute: Must show Celina. Selfies, mirror pics, photos taken by others of her, cute outfits, smiling, expressing her personality. Casual but flattering. If Celina is not clearly visible, classify as skip.
-
-business: Must relate to Celina's startup Nevo or founder/professional life. Includes: working on a laptop, office setting (929 Alton Road Miami), business meetings, networking events, screenshots of business-related apps/content, Nevo branding. Skip if business context is unclear.
-
-skip: Everything else — food, random objects, other people without Celina, blurry shots, screenshots of non-business content, unrelated scenes, duplicates.
-
-Reply with ONLY the category key and a confidence score 0-100.
-Format: CATEGORY|CONFIDENCE
-Example: model_editorial|91
-
-Only use a category if you are 75 or above in confidence. Otherwise reply: skip|confidence"""
-
-def classify_photo(client, photo_path, is_video=False):
+def classify_photo(client, photo_path, system_prompt, is_video=False):
     jpeg_path, needs_cleanup = prepare_for_api(photo_path, is_video)
     if jpeg_path is None:
         return "skip", 0
@@ -270,7 +325,7 @@ def classify_photo(client, photo_path, is_video=False):
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=20,
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             messages=[{
                 "role": "user",
                 "content": [{
@@ -289,7 +344,7 @@ def classify_photo(client, photo_path, is_video=False):
         conf_str   = parts[1].strip() if len(parts) > 1 else "50"
         confidence = int(''.join(c for c in conf_str if c.isdigit())[:3] or "50")
 
-        if category not in ALBUMS:
+        if category not in system_prompt:  # rough check; full validation in main
             return "skip", 0
 
         # Enforce confidence threshold — low confidence = skip
@@ -307,37 +362,54 @@ def classify_photo(client, photo_path, is_video=False):
 
 # ── Assisted mode ─────────────────────────────────────────────────────────────
 
-CATEGORY_KEYS = [k for k in ALBUMS.keys() if k != "skip"] + ["skip"]
-
-def assisted_classify(photo):
+def assisted_classify(photo, albums):
+    category_keys = [k for k in albums.keys() if k != "skip"] + ["skip"]
     open_photo_in_preview(photo["path"])
     kind = "VIDEO" if photo["is_video"] else "photo"
     print(f"\n  {kind}: {photo['date'].strftime('%Y-%m-%d')} ({photo['filename']})")
     print("  Categories:")
-    for i, key in enumerate(CATEGORY_KEYS, 1):
-        label = ALBUMS.get(key) or "Skip (not relevant)"
+    for i, key in enumerate(category_keys, 1):
+        label = albums.get(key) or "Skip (not relevant)"
         print(f"    {i}. {label}")
     print("    q. Quit for now")
 
+    n = len(category_keys)
     while True:
-        choice = input("  Your choice (1-6 or q): ").strip().lower()
+        choice = input(f"  Your choice (1-{n} or q): ").strip().lower()
         if choice == "q":
             close_preview()
             return None
         try:
             idx = int(choice) - 1
-            if 0 <= idx < len(CATEGORY_KEYS):
+            if 0 <= idx < n:
                 close_preview()
-                return CATEGORY_KEYS[idx]
+                return category_keys[idx]
         except ValueError:
             pass
-        print("  Invalid — enter a number 1-6 or q")
+        print(f"  Invalid — enter a number 1-{n} or q")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     TMP_DIR.mkdir(exist_ok=True)
-    cfg    = load_config()
+    cfg = load_config()
+
+    # First-run setup wizard
+    if not cfg.get("albums"):
+        if not sys.stdin.isatty():
+            print("ERROR: No albums configured. Run this script directly in a terminal first to complete setup.")
+            print("  python3 photo_sorter.py")
+            sys.exit(1)
+        cfg = run_setup_wizard(cfg)
+
+    albums        = build_albums_dict(cfg)
+    system_prompt = build_system_prompt(cfg)
+
+    if not API_KEY:
+        print("ERROR: ANTHROPIC_API_KEY environment variable is not set.")
+        print("  export ANTHROPIC_API_KEY=your_key_here")
+        sys.exit(1)
+
     client = anthropic.Anthropic(api_key=API_KEY)
 
     since = datetime.now(timezone.utc) - timedelta(days=30)
@@ -356,7 +428,7 @@ def main():
         save_config(cfg)
         return
 
-    ensure_albums_exist()
+    ensure_albums_exist(albums)
 
     mode = cfg.get("mode", "auto")
     if cfg["auto_classified"] > 0:
@@ -380,18 +452,18 @@ def main():
         kind_label = "VIDEO" if photo["is_video"] else photo["date"].strftime("%Y-%m-%d")
 
         if mode == "auto":
-            category, confidence = classify_photo(client, photo["path"], photo["is_video"])
-            album_label = ALBUMS.get(category) or "skip"
+            category, confidence = classify_photo(client, photo["path"], system_prompt, photo["is_video"])
+            album_label = albums.get(category) or "skip"
             flag = " ⚠️ low confidence" if confidence < CONFIDENCE_THRESHOLD else ""
             log(f"  {kind_label} → {album_label} ({confidence}%){flag}")
             cfg["auto_classified"] = cfg.get("auto_classified", 0) + 1
         else:
-            category = assisted_classify(photo)
+            category = assisted_classify(photo, albums)
             if category is None:
                 log("Paused by user.")
                 break
 
-        album_name = ALBUMS.get(category)
+        album_name = albums.get(category)
         if album_name:
             success = add_to_album(photo["uuid"], album_name)
             if success:
