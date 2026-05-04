@@ -1,6 +1,8 @@
 # Social Media Helpers
 
-A collection of Python tools for managing, analyzing, and growing a social media presence. Built for creators who want to automate the boring parts and focus on content.
+A collection of Python tools for managing, analysing, and growing a social media presence. Built for creators who want to automate the tedious parts and focus on content.
+
+Each tool has a guided first-run setup — just run it once in your terminal and it walks you through everything.
 
 ---
 
@@ -8,29 +10,44 @@ A collection of Python tools for managing, analyzing, and growing a social media
 
 | Tool | What it does |
 |------|-------------|
-| [`photo-sorter`](./photo-sorter/) | Auto-sorts iPhone/Mac photos into albums using Claude AI vision |
-| [`viral-content-analysis`](./viral-content-analysis/) | Tracks competitor accounts and surfaces top-performing posts, hooks, and formats into Notion |
-| [`instagram-stats`](./instagram-stats/) | Pulls your Instagram post stats into a structured Excel sheet via the Instagram Graph API |
+| [`photo-sorter`](./photo-sorter/) | Auto-sorts iPhone/Mac photos and videos into albums using Claude AI vision |
+| [`viral-content-analysis`](./viral-content-analysis/) | Tracks competitor Instagram accounts and surfaces top-performing posts, hooks, and formats into Notion |
+| [`instagram-stats`](./instagram-stats/) | Pulls your Instagram post and Reel stats into a structured Excel spreadsheet via the Instagram Graph API |
 
 ---
 
-## Setup
+## Quick start
 
-### 1. Install dependencies
-
-Each tool has its own requirements. See the individual README in each folder.
-
-### 2. Set environment variables
-
-Create a `.env` file in the root (see `.env.example`) or export variables in your shell:
+### 1. Clone the repo
 
 ```bash
-export ANTHROPIC_API_KEY=your_key_here       # photo-sorter, viral-content-analysis
-export INSTAGRAM_APP_ID=your_app_id          # instagram-stats
-export INSTAGRAM_APP_SECRET=your_app_secret  # instagram-stats
+git clone https://github.com/CKrogmann/Social-Media-Helpers.git
+cd Social-Media-Helpers
 ```
 
-### 3. Run a tool
+### 2. Install dependencies
+
+Each tool installs its own requirements. A common starting point:
+
+```bash
+pip install anthropic requests openpyxl imageio-ffmpeg instaloader
+```
+
+See each tool's README for the exact requirements.
+
+### 3. Set your API keys
+
+```bash
+export ANTHROPIC_API_KEY=your_anthropic_key      # photo-sorter, viral-content-analysis
+export INSTAGRAM_APP_ID=your_facebook_app_id     # instagram-stats (optional but recommended)
+export INSTAGRAM_APP_SECRET=your_facebook_secret # instagram-stats (optional but recommended)
+```
+
+Add these to your `~/.zshrc` or `~/.bash_profile` to make them permanent.
+
+### 4. Run a tool
+
+Each tool has a guided first-run wizard:
 
 ```bash
 python3 photo-sorter/photo_sorter.py
@@ -40,25 +57,67 @@ python3 instagram-stats/instagram_stats_updater.py
 
 ---
 
-## Requirements
+## Using with Claude Code
 
-- Python 3.10+
-- An [Anthropic API key](https://console.anthropic.com/) (for photo-sorter and viral-content-analysis)
-- A Facebook Developer app with Instagram Graph API access (for instagram-stats)
+If you use [Claude Code](https://claude.ai/code), you can install these as skills that let you trigger each tool by typing a slash command.
+
+### Install via plugin (recommended)
+
+This repo is published as a Claude Code plugin. Install it with:
+
+```
+/install-plugin https://github.com/CKrogmann/Social-Media-Helpers
+```
+
+Then use:
+- `/photo-sorter` — sort your photos
+- `/viral-content-analysis` — run competitor analysis
+- `/instagram-stats` — refresh your stats
+
+### Install manually via setup script
+
+```bash
+bash setup.sh
+```
+
+This symlinks the skills into `~/.claude/skills/`. Then add these lines to `~/.claude/CLAUDE.md`:
+
+```
+## Social Media Helpers
+- `/photo-sorter` — auto-sort Photos library into albums using Claude AI
+- `/viral-content-analysis` — track competitor Instagram accounts, push to Notion
+- `/instagram-stats` — refresh Instagram post stats in Excel
+```
 
 ---
 
-## Structure
+## Requirements
+
+| Tool | Requirements |
+|------|-------------|
+| photo-sorter | macOS, Python 3.10+, Anthropic API key |
+| viral-content-analysis | Python 3.10+, Anthropic API key, Notion account |
+| instagram-stats | Python 3.10+, Facebook Developer app, Business/Creator Instagram account |
+
+---
+
+## Project structure
 
 ```
 social-media-helpers/
-├── photo-sorter/               # AI-powered photo organizer
+├── photo-sorter/
 │   ├── README.md
 │   └── photo_sorter.py
-├── viral-content-analysis/     # Competitor content tracker
+├── viral-content-analysis/
 │   ├── README.md
 │   └── viral_content_analysis.py
-└── instagram-stats/            # Instagram stats → Excel
-    ├── README.md
-    └── instagram_stats_updater.py
+├── instagram-stats/
+│   ├── README.md
+│   └── instagram_stats_updater.py
+├── skills/                   # Claude Code skill definitions
+│   ├── photo-sorter/
+│   ├── viral-content-analysis/
+│   └── instagram-stats/
+├── .env.example
+└── setup.sh
 ```

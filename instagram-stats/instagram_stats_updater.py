@@ -6,15 +6,28 @@ Instagram Stats Updater v3
 - Preserves ALL manually-entered fields
 - No duplicate rows
 - Falls back to existing stats for posts outside 90-day window
+- Creates Excel file on first run with proper structure
 """
 
-import json, os, requests, openpyxl
+import json, os, requests, openpyxl, sys
 from datetime import datetime, timezone, timedelta
 
 CONFIG_FILE = os.path.expanduser("~/.instagram_stats_config.json")
-EXCEL_PATH  = os.path.expanduser("~/Celina Krogmann SM Planning.xlsx")
 BASE_URL    = "https://graph.facebook.com/v25.0"
 FORMAT_MAP  = {"IMAGE": "Static", "CAROUSEL_ALBUM": "Carousel", "VIDEO": "Reel"}
+
+POST_HEADERS = [
+    "Post Date", "Content Pillar", "Asset", "Format", "Views",
+    "Reach", "Avg Reach", "Views/Reach", "Interactions", "Interaction Rate",
+    "Likes", "Saves", "Shares", "Profile Visits", "Follows", "Follow Rate",
+    "% Men", "% Women", "", "Score"
+]
+REEL_HEADERS = [
+    "Post Date", "Content Pillar", "Series", "Asset", "Hook",
+    "Views", "Reach", "Avg Reach", "Views/Reach", "Interactions", "Interaction Rate",
+    "Likes", "Saves", "Shares", "Follows", "Follow Rate",
+    "% Men", "% Women", "", "Score"
+]
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -24,11 +37,12 @@ def load_config():
             return json.load(f)
     cfg = {
         "access_token":  "",
-        "ig_user_id":    "17841401302003364",
+        "ig_user_id":    "",
         "app_id":        os.getenv("INSTAGRAM_APP_ID", ""),
         "app_secret":    os.getenv("INSTAGRAM_APP_SECRET", ""),
         "token_expires": (datetime.now(timezone.utc) + timedelta(days=60)).isoformat(),
         "last_run":      None,
+        "excel_path":    "",
     }
     save_config(cfg)
     return cfg
@@ -36,6 +50,91 @@ def load_config():
 def save_config(cfg):
     with open(CONFIG_FILE, "w") as f:
         json.dump(cfg, f, indent=2)
+
+# ── First-run setup ───────────────────────────────────────────────────────────
+
+def fetch_ig_user_id(token):
+    """Fetch Instagram user ID automatically from the Graph API."""
+    r = requests.get(f"{BASE_URL}/me", params={"fields": "id,name", "access_token": token}).json()
+    if "id" in r:
+        return r["id"], r.get("name", "")
+    return None, None
+
+def create_excel_file(path, year):
+    """Create a new Excel workbook with properly structured sheets and headers."""
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws_posts = wb.create_sheet(f"Instagram Posts {year}")
+    ws_posts.append(POST_HEADERS)
+
+    ws_reels = wb.create_sheet(f"Instagram Reels {year}")
+    ws_reels.append(REEL_HEADERS)
+
+    wb.save(path)
+    print(f"  Created new Excel file: {path}")
+
+def run_setup_wizard(cfg):
+    """Interactive first-run wizard — collects token, fetches user ID, sets Excel path."""
+    print("\n" + "="*55)
+    print("  Instagram Stats — First-time Setup")
+    print("="*55 + "\n")
+
+    # Step 1: Access token
+    if not cfg.get("access_token"):
+        print("Step 1 of 3 — Instagram Access Token")
+        print("─" * 40)
+        print("You need a long-lived access token from the Instagram Graph API.\n")
+        print("How to get one (takes ~2 minutes):")
+        print("  1. Go to developers.facebook.com")
+        print("  2. Open your app → click 'Instagram' in the left menu")
+        print("  3. Click 'Generate Access Token'")
+        print("  4. Log in with your Instagram account when prompted")
+        print("  5. Copy the long token that appears\n")
+        token = input("Paste your access token here: ").strip()
+        if not token:
+            print("No token entered. Run the script again when you have your token.")
+            sys.exit(1)
+        cfg["access_token"] = token
+        cfg["token_expires"] = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+
+    # Step 2: Instagram User ID — fetched automatically from the token
+    if not cfg.get("ig_user_id"):
+        print("\nStep 2 of 3 — Connecting to your Instagram account...")
+        ig_id, ig_name = fetch_ig_user_id(cfg["access_token"])
+        if ig_id:
+            cfg["ig_user_id"] = ig_id
+            print(f"  ✓ Connected as: {ig_name} (User ID: {ig_id})")
+        else:
+            print("  Could not fetch your user ID — your token may be invalid or expired.")
+            print("  Find it manually: Graph API Explorer → me?fields=id,name")
+            ig_id = input("  Enter your Instagram User ID: ").strip()
+            if not ig_id:
+                print("User ID is required. Exiting.")
+                sys.exit(1)
+            cfg["ig_user_id"] = ig_id
+
+    # Step 3: Excel file path
+    if not cfg.get("excel_path"):
+        year = datetime.now().year
+        default_path = os.path.expanduser(f"~/Instagram Stats {year}.xlsx")
+        print(f"\nStep 3 of 3 — Stats Spreadsheet")
+        print("─" * 40)
+        print(f"I'll create a new Excel file to store your stats.")
+        print(f"Default location: {default_path}")
+        path_input = input("Full path (or press Enter for default): ").strip()
+        excel_path = path_input if path_input else default_path
+
+        if os.path.exists(excel_path):
+            print(f"  Found existing file: {excel_path}")
+        else:
+            create_excel_file(excel_path, year)
+
+        cfg["excel_path"] = excel_path
+
+    save_config(cfg)
+    print("\n✓ Setup complete! Running your stats now...\n")
+    return cfg
 
 # ── Token ─────────────────────────────────────────────────────────────────────
 
@@ -56,7 +155,7 @@ def maybe_refresh_token(cfg):
         print("  Token refreshed.")
     else:
         print(f"  WARNING: Could not refresh — {r.get('error',{}).get('message')}")
-        print("  Generate a new token at developers.facebook.com → Celina Stats → Instagram → Generate token")
+        print("  Generate a new token at developers.facebook.com → your app → Instagram → Generate Token")
         print("  Then update 'access_token' in ~/.instagram_stats_config.json")
     return cfg
 
@@ -91,7 +190,6 @@ def fetch_insights(media_id, media_type, token):
 # ── Excel helpers ─────────────────────────────────────────────────────────────
 
 def read_rows(ws, n_cols=20):
-    """Read all non-empty data rows as list of lists (skip header)."""
     out = []
     for row in ws.iter_rows(min_row=2, max_col=n_cols, values_only=True):
         if any(v is not None for v in row):
@@ -109,10 +207,6 @@ def to_dt(ts_str):
 # ── Merge logic ───────────────────────────────────────────────────────────────
 
 def build_pool(existing_rows, manual_col_indices):
-    """
-    Build a pool of existing rows keyed by date.
-    manual_col_indices: set of 0-based col indices considered 'manual'
-    """
     from collections import defaultdict
     pool = defaultdict(list)
     for row in existing_rows:
@@ -127,7 +221,6 @@ def build_pool(existing_rows, manual_col_indices):
     return pool
 
 def pop_match(pool, date_key):
-    """Return first unmatched pool entry for this date, or {}."""
     for entry in pool.get(date_key, []):
         if not entry["matched"]:
             entry["matched"] = True
@@ -135,37 +228,24 @@ def pop_match(pool, date_key):
     return None
 
 def merge_posts(existing_rows, media_list, insights):
-    """
-    Returns list of merged post dicts, newest first.
-    Priority:
-      - API stats used when fresh insights available (within 90d)
-      - Existing stats used as fallback for older posts
-      - Manual fields ALWAYS preserved from existing rows
-      - Views column always preserved (API never provides it for posts)
-    """
-    pool = build_pool(existing_rows, manual_col_indices={1, 2, 3, 16})
-
+    pool   = build_pool(existing_rows, manual_col_indices={1, 2, 3, 16})
     merged = []
     for m in media_list:
         if m["media_type"] == "VIDEO":
             continue
-        ts      = to_dt(m["timestamp"])
-        ins     = insights.get(m["id"])  # None = not fetched OR pre-business
-        ex      = pop_match(pool, ts.date()) or [None] * 20
+        ts  = to_dt(m["timestamp"])
+        ins = insights.get(m["id"])
+        ex  = pop_match(pool, ts.date()) or [None] * 20
 
-        # Stats: prefer fresh API, fall back to existing
         def api_or_existing(api_val, ex_col):
             return api_val if api_val is not None else ex[ex_col]
 
         merged.append({
             "date":           ts.replace(tzinfo=None),
-            # Manual fields — always from existing row
             "content_pillar": ex[1],
             "asset":          ex[2],
             "format":         ex[3] or FORMAT_MAP.get(m["media_type"], ""),
-            # Views — API never provides this for posts, always preserve existing
             "views":          ex[4],
-            # API stats with fallback to existing
             "reach":          api_or_existing(ins.get("reach")              if ins else None, 5),
             "interactions":   api_or_existing(ins.get("total_interactions") if ins else None, 8),
             "likes":          m.get("like_count") or ex[10],
@@ -173,15 +253,12 @@ def merge_posts(existing_rows, media_list, insights):
             "shares":         api_or_existing(ins.get("shares")             if ins else None, 12),
             "profile_visits": api_or_existing(ins.get("profile_visits")     if ins else None, 13),
             "follows":        api_or_existing(ins.get("follows")            if ins else None, 14),
-            # Manual fields continued
             "men_share":      ex[16],
         })
 
-    # Add truly manual-only rows (have Content Pillar but no API post matched)
-    # These are rows the user added for posts not in the API (e.g. deleted posts)
     for entries in pool.values():
         for entry in entries:
-            if not entry["matched"] and entry["row"][1] is not None:  # has Content Pillar
+            if not entry["matched"] and entry["row"][1] is not None:
                 ex = entry["row"]
                 d  = ex[0]
                 merged.append({
@@ -260,7 +337,7 @@ def write_posts(ws, rows):
         ws.cell(r,  2).value = d["content_pillar"]
         ws.cell(r,  3).value = d["asset"]
         ws.cell(r,  4).value = d["format"]
-        ws.cell(r,  5).value = d["views"]           # preserved from manual entry
+        ws.cell(r,  5).value = d["views"]
         ws.cell(r,  6).value = d["reach"]
         ws.cell(r,  7).value = "=AVERAGE(F:F)"
         ws.cell(r,  8).value = f"=E{r}/F{r}"
@@ -316,10 +393,26 @@ def write_reels(ws, rows):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    cfg   = load_config()
-    cfg   = maybe_refresh_token(cfg)
-    token = cfg["access_token"]
-    ig_id = cfg["ig_user_id"]
+    cfg = load_config()
+
+    # First-run setup if any required fields are missing
+    needs_setup = (
+        not cfg.get("access_token")
+        or not cfg.get("ig_user_id")
+        or not cfg.get("excel_path")
+    )
+    if needs_setup:
+        if not sys.stdin.isatty():
+            print("ERROR: First-time setup required. Run this script directly in a terminal:")
+            print("  python3 instagram_stats_updater.py")
+            sys.exit(1)
+        cfg = run_setup_wizard(cfg)
+
+    cfg        = maybe_refresh_token(cfg)
+    token      = cfg["access_token"]
+    ig_id      = cfg["ig_user_id"]
+    excel_path = cfg["excel_path"]
+    year       = datetime.now().year
 
     cutoff_90 = datetime.now(timezone.utc) - timedelta(days=90)
     last_run  = datetime.fromisoformat(cfg["last_run"]) if cfg.get("last_run") else None
@@ -328,6 +421,11 @@ def main():
     print(f"Instagram Stats Updater v3  —  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"90-day refresh window:  posts since {cutoff_90.date()}")
     print(f"{'='*55}\n")
+
+    # Recreate Excel if it was deleted or moved
+    if not os.path.exists(excel_path):
+        print(f"Excel file not found at {excel_path} — creating a fresh copy...")
+        create_excel_file(excel_path, year)
 
     print("Fetching media list from Instagram...")
     all_media = fetch_all_media(ig_id, token)
@@ -342,9 +440,20 @@ def main():
     print(f"  Fetched insights for {len(insights)} posts/reels\n")
 
     print("Reading existing Excel data...")
-    wb        = openpyxl.load_workbook(EXCEL_PATH)
-    post_rows = read_rows(wb["Instagram Posts 2026"])
-    reel_rows = read_rows(wb["Instagram Reels 2026"])
+    wb          = openpyxl.load_workbook(excel_path)
+    posts_sheet = f"Instagram Posts {year}"
+    reels_sheet = f"Instagram Reels {year}"
+
+    # Create sheets for the current year if they don't exist (new year rollover)
+    if posts_sheet not in wb.sheetnames:
+        ws = wb.create_sheet(posts_sheet)
+        ws.append(POST_HEADERS)
+    if reels_sheet not in wb.sheetnames:
+        ws = wb.create_sheet(reels_sheet)
+        ws.append(REEL_HEADERS)
+
+    post_rows = read_rows(wb[posts_sheet])
+    reel_rows = read_rows(wb[reels_sheet])
     print(f"  Found {len(post_rows)} existing post rows, {len(reel_rows)} reel rows\n")
 
     print("Merging and deduplicating...")
@@ -352,11 +461,11 @@ def main():
     merged_reels = merge_reels(reel_rows, all_media, insights)
 
     print("Writing updated sheets...")
-    write_posts(wb["Instagram Posts 2026"], merged_posts)
-    write_reels(wb["Instagram Reels 2026"], merged_reels)
+    write_posts(wb[posts_sheet], merged_posts)
+    write_reels(wb[reels_sheet], merged_reels)
 
-    wb.save(EXCEL_PATH)
-    print(f"\nSaved  →  {EXCEL_PATH}")
+    wb.save(excel_path)
+    print(f"\nSaved  →  {excel_path}")
 
     cfg["last_run"] = datetime.now(timezone.utc).isoformat()
     save_config(cfg)

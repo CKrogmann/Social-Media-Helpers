@@ -1,18 +1,16 @@
 ---
 name: instagram-stats
-description: Refresh Instagram post and reel stats in an Excel planning sheet via the Instagram Graph API
+description: Refresh Instagram post and reel stats in an Excel spreadsheet via the Instagram Graph API. Use when asked to update Instagram stats, refresh analytics, or run the stats updater.
 allowed-tools: Bash(python3 *), Bash(curl *), Bash(find *)
 ---
 
 # Instagram Stats Updater
 
-## Step 1 — Get the script
-
-Run this to find or download the script automatically:
+## Step 1 — Find the script
 
 ```bash
 SCRIPT=$(find ~/.claude/plugins/cache -name "instagram_stats_updater.py" 2>/dev/null | head -1)
-[ -z "$SCRIPT" ] && SCRIPT=$(find ~/social-media-helpers -name "instagram_stats_updater.py" 2>/dev/null | head -1)
+[ -z "$SCRIPT" ] && SCRIPT=$(find ~ -maxdepth 4 -name "instagram_stats_updater.py" 2>/dev/null | grep -v ".git" | head -1)
 if [ -z "$SCRIPT" ]; then
   curl -sL "https://raw.githubusercontent.com/CKrogmann/Social-Media-Helpers/main/instagram-stats/instagram_stats_updater.py" \
     -o "$HOME/.instagram_stats_updater.py"
@@ -30,48 +28,34 @@ python3 -c "
 import json, os
 p = os.path.expanduser('~/.instagram_stats_config.json')
 cfg = json.load(open(p)) if os.path.exists(p) else {}
-print('READY' if cfg.get('access_token') else 'NEEDS_TOKEN')
+ready = bool(cfg.get('access_token') and cfg.get('ig_user_id') and cfg.get('excel_path'))
+print('READY' if ready else 'NEEDS_SETUP')
 "
 ```
 
 If `READY`, skip to Step 4.
 
-## Step 3 — Ask for the token (friendly, no jargon)
+## Step 3 — Guide the user through setup (friendly, no jargon)
 
-Say exactly this to the user:
+The script has a built-in setup wizard, but it needs to run in an interactive terminal. Tell the user:
 
-> To connect to your Instagram account I need an access token — it's like a password that lets me read your post stats.
+> To get started, I need you to run the setup once in your terminal — it takes about 2 minutes and only happens once.
 >
-> Here's how to get it (takes 2 minutes):
-> 1. Go to **[developers.facebook.com](https://developers.facebook.com)**
-> 2. Open your app → click **Instagram** in the left menu → click **Generate Access Token**
-> 3. Log in with your Instagram account when prompted
-> 4. Copy the long token that appears
+> Here's what you'll need:
+> 1. An **Instagram access token** — I'll explain how to get it during setup
+> 2. That's it — everything else is automatic
 >
-> Paste it here and I'll take care of the rest.
+> Open your terminal and run:
+> ```
+> python3 [SCRIPT_PATH]
+> ```
+> (Replace `[SCRIPT_PATH]` with the path shown above.)
+>
+> The script will walk you through getting your token, connect your account automatically, and create your spreadsheet. Come back here when it's done.
 
-Wait for the user to paste their token. When they do, save the config silently:
+Replace `[SCRIPT_PATH]` with the value of `SCRIPT=` from Step 1.
 
-```bash
-python3 - << 'PYEOF'
-import json, os
-from datetime import datetime, timezone, timedelta
-token = "TOKEN_GOES_HERE"
-cfg = {
-    "access_token": token,
-    "ig_user_id": "",
-    "app_id": os.getenv("INSTAGRAM_APP_ID", ""),
-    "app_secret": os.getenv("INSTAGRAM_APP_SECRET", ""),
-    "token_expires": (datetime.now(timezone.utc) + timedelta(days=60)).isoformat(),
-    "last_run": None
-}
-with open(os.path.expanduser("~/.instagram_stats_config.json"), "w") as f:
-    json.dump(cfg, f, indent=2)
-print("done")
-PYEOF
-```
-
-Replace `TOKEN_GOES_HERE` with the token the user pasted. Then say "Got it, running your stats now..."
+Once the user confirms setup is complete, run the check in Step 2 again and proceed to Step 4.
 
 ## Step 4 — Run the script
 
@@ -82,7 +66,7 @@ python3 "$SCRIPT" 2>&1
 ## Step 5 — Report back in plain English
 
 Tell the user:
-- How many posts and reels were pulled
-- That their Excel file has been updated (mention the filename)
-- If the token was refreshed automatically
+- How many posts and reels were pulled from Instagram
+- The path to their Excel file and that it's been updated
+- Whether the token was refreshed automatically
 - If anything went wrong, say what happened and what to do — no technical jargon

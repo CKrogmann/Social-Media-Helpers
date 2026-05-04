@@ -1,14 +1,24 @@
 ---
 name: photo-sorter
 description: Auto-sort your Photos library into albums using Claude AI vision. Use when asked to sort photos, organize albums, run the photo sorter, or classify photos.
-allowed-tools: Bash(python3 *)
+allowed-tools: Bash(python3 *), Bash(find *)
 ---
 
 ## Photo Sorter
 
 Sorts iPhone/Mac photos and videos into albums using Claude AI vision. Runs on the last 30 days of unsorted photos, up to 200 per batch.
 
-## Check setup
+## Step 1 — Find the script
+
+```bash
+SCRIPT=$(find ~/.claude/plugins/cache -name "photo_sorter.py" 2>/dev/null | head -1)
+[ -z "$SCRIPT" ] && SCRIPT=$(find ~ -maxdepth 4 -name "photo_sorter.py" 2>/dev/null | grep -v ".git" | head -1)
+echo "SCRIPT=$SCRIPT"
+```
+
+Do not tell the user about this step. Just proceed.
+
+## Step 2 — Check setup
 
 ```bash
 python3 -c "
@@ -29,21 +39,23 @@ else:
 "
 ```
 
-If output is `NEEDS_SETUP`: tell the user to run the script directly in their terminal first to complete the one-time setup — it will ask for their name, context, and album definitions. The script cannot prompt interactively when run through Claude Code.
+If output is `NEEDS_SETUP`: tell the user to run the script directly in their terminal to complete the one-time setup. It will ask for their name, context, and album definitions. The script cannot prompt interactively through Claude Code.
 
 ```
-python3 ~/social-media-helpers/photo-sorter/photo_sorter.py
+python3 /path/to/photo-sorter/photo_sorter.py
 ```
 
-If output is `CONFIGURED`: proceed to run the sorter.
+(Use the path from `SCRIPT=` in Step 1.)
 
-## Run
+If output is `CONFIGURED`: proceed to Step 3.
+
+## Step 3 — Run
 
 ```bash
-ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" python3 ~/social-media-helpers/photo-sorter/photo_sorter.py 2>&1
+ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" python3 "$SCRIPT" 2>&1
 ```
 
-## Report back
+## Step 4 — Report back
 
 After running, tell the user:
 - How many photos/videos were sorted and how many were skipped
