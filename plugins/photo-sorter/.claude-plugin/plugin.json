@@ -1,6 +1,6 @@
 {
   "name": "photo-sorter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Auto-sort your Photos library into custom albums using Claude AI vision",
   "author": {
     "name": "CKrogmann",

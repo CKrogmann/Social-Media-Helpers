@@ -1,6 +1,6 @@
 {
   "name": "instagram-stats",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Refresh your Instagram post and reel stats in an Excel planning sheet via the Instagram Graph API",
   "author": {
     "name": "CKrogmann",

@@ -1,6 +1,6 @@
 {
   "name": "viral-content-analysis",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Track competitor Instagram accounts and surface top-performing posts, hooks, and formats into Notion",
   "author": {
     "name": "CKrogmann",
