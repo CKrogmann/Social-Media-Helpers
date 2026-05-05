@@ -9,6 +9,7 @@
   "plugins": [
     {
       "name": "photo-sorter",
+      "version": "1.1.0",
       "source": "./plugins/photo-sorter",
       "description": "Auto-sort your Photos library into custom albums using Claude AI vision. Define your own album names and sorting criteria on first run.",
       "author": {
@@ -19,6 +20,7 @@
     },
     {
       "name": "viral-content-analysis",
+      "version": "1.1.0",
       "source": "./plugins/viral-content-analysis",
       "description": "Track competitor Instagram accounts and surface top-performing posts, hooks, and content formats into Notion.",
       "author": {
@@ -29,6 +31,7 @@
     },
     {
       "name": "instagram-stats",
+      "version": "1.1.0",
       "source": "./plugins/instagram-stats",
       "description": "Refresh your Instagram post and reel stats in an Excel planning sheet via the Instagram Graph API.",
       "author": {
